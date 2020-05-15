@@ -1,0 +1,197 @@
+---
+title: "PS4"
+author: "xy"
+date: '2020-03-17'
+output:
+  word_document: default
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r}
+library(dplyr)
+library(tidyverse)
+library(skimr)
+library(ggplot2)
+library(plyr)
+library(broom)
+# Read the dataset
+dat <- read.csv("cookie_cats.csv")
+
+
+
+# Add a new column - group, if version == "gate_30", assign control group; otherwise, assign treatment group; then we select the four columns from the dataset: sum_gamerounds, retention_1, retention_7 and group 
+dat <- dat %>% mutate(group = ifelse(version == "gate_30", "control", "treatment")) %>% select(sum_gamerounds, retention_1, retention_7, group)
+
+
+dat$retention_1 <- as.factor(dat$retention_1)
+dat$retention_7 <- as.factor(dat$retention_7)
+dat$group <- as.factor(dat$group)
+dat
+```
+
+
+
+
+Check the missing values and the number of records in total
+skim(dat)
+# Check the number of elements in each group
+
+```{r}
+
+library(dplyr) 
+dat %>% group_by(group) %>% summarise(count = n())
+
+```
+table1 <- dat %>% group_by(sum_gamerounds) %>% summarise(count = n()) %>% filter(sum_gamerounds<=200)
+table1
+ggplot(table1, aes(x=sum_gamerounds, y=count))+
+  geom_point()+
+  theme_bw()+
+  ggtitle("Games played by a User")+
+  xlab("Total Game Rounds Played")+
+  ylab("Total Number oF Users")+
+  geom_line()
+```{r}
+# Plot the number of users for the total rounds played <= 200 
+
+```
+table2 <- dat %>% group_by(sum_gamerounds) %>% summarise(count = n()) %>% filter(sum_gamerounds<=20)
+table2
+ggplot(table2, aes(x=sum_gamerounds, y=count))+
+  geom_point()+
+  theme_bw()+
+  ggtitle("Games played by a User")+
+  xlab("Total Game Rounds Played")+
+  ylab("Total Number oF Users")+
+  geom_line()
+```{r}
+
+# Plot the number of users for the total rounds played <= 20
+
+```
+
+```{r}
+# Check the outliers for sum_gamerounds:
+boxplot(dat$sum_gamerounds, main = "the boxplot for sum_gamerounds", xlab = "sum_gamerounds")
+# The boxplot for sum_gamerounds after removing the one most extreme outlier:
+clean_dat <- dat %>% filter(sum_gamerounds<40000)
+boxplot(clean_dat$sum_gamerounds, main = "the boxplot for sum_gamerounds", xlab = "sum_gamerounds")
+quantile(clean_dat$sum_gamerounds)
+```
+clean_dat %>% 
+ggplot(aes(x = sum_gamerounds, 
+             fill = group)) +
+  geom_histogram(position = "dodge",
+                 binwidth = 0.2) +
+  theme_minimal() +
+  labs(x = "Outcome",
+       y = "Number of gamerounds",
+       fill = "Person was treated") +
+  scale_fill_brewer(palette = "Set1")+xlim(0,800)+ylim(0,750)
+
+
+```{r}
+# Model Analysis:
+# We use a t-testto formally test if there is a difference in two groups
+group_treatment <- clean_dat %>% 
+  filter(group=="treatment") %>% 
+  select(sum_gamerounds) %>%
+  as.vector() %>%
+  unlist()
+group_control <- clean_dat %>% 
+  filter(group=="control") %>% 
+  select(sum_gamerounds) %>%
+  as.vector() %>%
+  unlist()
+t.test(group_treatment, group_control)
+# We could also use the tidy function in the broom package.
+tidy(t.test(group_treatment, group_control))
+
+regression_1 <- lm(sum_gamerounds ~ group, data = clean_dat)
+
+tidy(regression_1)
+```
+
+
+
+```{r}
+# we run ANOVA to test "what's the difference between the treatment group and the control group"
+clean_dat <- clean_dat %>%
+  mutate(retention.1 = ifelse(retention_1=="FALSE", 0, 1)) %>%
+  mutate(retention.7 = ifelse(retention_7=="FALSE", 0, 1)) %>%
+  mutate(groups = ifelse(group=="treatment", 1, 0))
+
+
+# retention_1
+aov(groups ~ retention_1, data = clean_dat) %>% tidy()
+# retention_7
+aov(groups ~ retention_7, data = clean_dat) %>% tidy()
+
+
+
+```
+
+```{r}
+library(dplyr)
+
+emp_mtrx <- matrix(nrow = 0, ncol = 2)
+colnames(emp_mtrx) <- c("gate_30", "gate_40")
+boot_1d <- as_tibble(emp_mtrx)
+
+for(i in 1:100){
+    boot_1d[i, ]  <- clean_dat[sample(1:nrow(df), nrow(df), replace = TRUE), ] %>% group_by(group) %>% dplyr::summarise(mean_gate = mean(retention_1)) %>% ungroup() %>% spread(group, mean_gate)
+}
+
+
+```
+
+
+
+```{r}
+# useful plots
+treat <- clean_dat %>%
+  filter(groups == 1)
+table(treat$retention_1)
+control <- clean_dat %>%
+  filter(groups == 0)
+table(control$retention_1)
+x1 <- c("treatment_no_retention", "treatment_retention", "control_no_retention", "control_retention")
+y1 <- c(25370,20119,24665,20034)
+pct <- round(y1/sum(y1)*100)
+x1 <- paste(x1, pct) # add percents to labels
+x1 <- paste(x1,"%",sep="") # ad % to labels
+pie(y1, labels = x1, main = "Pie Chart for Retention_1")
+treat <- clean_dat %>%
+  filter(groups == 1)
+table(treat$retention_7)
+control <- clean_dat %>%
+  filter(groups == 0)
+table(control$retention_7)
+x2 <- c("treatment_no_retention", "treatment_retention", "control_no_retention", "control_retention")
+y2 <- c(37210,8279,36198,8501)
+pct2 <- round(y2/sum(y2)*100)
+x2 <- paste(x2, pct2) # add percents to labels
+x2 <- paste(x2,"%",sep="") # ad % to labels
+pie(y2, labels = x2, main = "Pie Chart for Retention_7")
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
